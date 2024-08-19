@@ -246,7 +246,7 @@ var Users = /** @class */ (function () {
             });
         }); };
         this.followersV2 = function (userResolvable, limit) { return __awaiter(_this, void 0, void 0, function () {
-            var user, userID, totalFollowers, followers, nextHref, pageSize, maxRetries, retryDelay, handleResponse, logProgress, fetchPage, _loop_3, this_3, state_1, error_1;
+            var user, userID, totalFollowers, followers, nextHref, pageSize, maxRetries, retryDelay, maxConsecutiveEmptyResponses, targetCount, handleResponse, logProgress, fetchPage, fetchedCount, consecutiveEmptyResponses, _loop_3, this_3, state_1, error_1;
             var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -260,6 +260,8 @@ var Users = /** @class */ (function () {
                         pageSize = 200;
                         maxRetries = 3;
                         retryDelay = 5000;
+                        maxConsecutiveEmptyResponses = 3;
+                        targetCount = limit ? Math.min(totalFollowers, limit) : totalFollowers;
                         handleResponse = function (response) {
                             if (typeof response === 'string') {
                                 try {
@@ -311,13 +313,16 @@ var Users = /** @class */ (function () {
                         };
                         _a.label = 2;
                     case 2:
-                        _a.trys.push([2, 7, , 8]);
+                        _a.trys.push([2, 6, , 7]);
+                        fetchedCount = 0;
+                        consecutiveEmptyResponses = 0;
                         _loop_3 = function () {
-                            var requestLimit, response, _b, url, params_1;
+                            var remainingCount, requestLimit, response, _b, url, params_1;
                             return __generator(this, function (_c) {
                                 switch (_c.label) {
                                     case 0:
-                                        requestLimit = limit ? Math.min(pageSize, limit - followers.length) : pageSize;
+                                        remainingCount = targetCount - fetchedCount;
+                                        requestLimit = Math.min(pageSize, remainingCount);
                                         response = void 0;
                                         if (!!nextHref) return [3 /*break*/, 2];
                                         _b = handleResponse;
@@ -338,17 +343,27 @@ var Users = /** @class */ (function () {
                                         _c.label = 4;
                                     case 4:
                                         if (response && Array.isArray(response.collection)) {
-                                            followers = followers.concat(response.collection);
-                                            nextHref = response.next_href;
-                                            logProgress(followers.length, limit || totalFollowers);
+                                            if (response.collection.length === 0) {
+                                                consecutiveEmptyResponses++;
+                                                if (consecutiveEmptyResponses >= maxConsecutiveEmptyResponses) {
+                                                    console.warn("Received ".concat(maxConsecutiveEmptyResponses, " consecutive empty responses. Stopping fetch."));
+                                                    return [2 /*return*/, "break"];
+                                                }
+                                            }
+                                            else {
+                                                consecutiveEmptyResponses = 0;
+                                                followers = followers.concat(response.collection);
+                                                fetchedCount += response.collection.length;
+                                                nextHref = response.next_href;
+                                                logProgress(fetchedCount, targetCount);
+                                            }
                                         }
                                         else {
                                             console.error('Unexpected response format:', JSON.stringify(response, null, 2));
                                             return [2 /*return*/, "break"];
                                         }
-                                        // If we have a limit, stop when we hit it
-                                        if (limit && followers.length >= limit) {
-                                            followers = followers.slice(0, limit);
+                                        if (!nextHref) {
+                                            console.log('No more pages available. Ending fetch.');
                                             return [2 /*return*/, "break"];
                                         }
                                         return [2 /*return*/];
@@ -357,26 +372,22 @@ var Users = /** @class */ (function () {
                         };
                         this_3 = this;
                         _a.label = 3;
-                    case 3: return [5 /*yield**/, _loop_3()];
+                    case 3:
+                        if (!(fetchedCount < targetCount)) return [3 /*break*/, 5];
+                        return [5 /*yield**/, _loop_3()];
                     case 4:
                         state_1 = _a.sent();
                         if (state_1 === "break")
-                            return [3 /*break*/, 6];
-                        _a.label = 5;
-                    case 5:
-                        if (nextHref && (!limit || followers.length < totalFollowers)) return [3 /*break*/, 3];
-                        _a.label = 6;
-                    case 6: return [3 /*break*/, 8];
-                    case 7:
+                            return [3 /*break*/, 5];
+                        return [3 /*break*/, 3];
+                    case 5: return [3 /*break*/, 7];
+                    case 6:
                         error_1 = _a.sent();
                         console.error('Error fetching followers:', error_1);
-                        return [3 /*break*/, 8];
-                    case 8:
-                        // Ensure that we didn't skip any due to odd API behavior or conditions
-                        if (followers.length > totalFollowers) {
-                            followers = followers.slice(0, totalFollowers);
-                        }
-                        return [2 /*return*/, followers];
+                        return [3 /*break*/, 7];
+                    case 7: 
+                    // Ensure we don't return more followers than requested or available
+                    return [2 /*return*/, followers.slice(0, targetCount)];
                 }
             });
         }); };

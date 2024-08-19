@@ -44,7 +44,7 @@ var soundcloud = new soundcloud_1.default(process.env.SOUNDCLOUD_CLIENT_ID, proc
     var limitedFollowers;
     return __generator(this, function (_a) {
         switch (_a.label) {
-            case 0: return [4 /*yield*/, soundcloud.users.followersV2('solarstone')];
+            case 0: return [4 /*yield*/, soundcloud.users.followersV2('jamesanjunadeep')];
             case 1:
                 limitedFollowers = _a.sent();
                 fs.writeFileSync('./test.json', JSON.stringify(limitedFollowers));
