@@ -103,18 +103,12 @@ export class Users {
 
     public async followersV2(
       userResolvable: string | number,
-      processFollowers: (followers: SoundcloudUserV2[]) => Promise<void>
-    ): Promise<void> {
+      offset: number = 0,
+      limit: number = 200
+    ): Promise<FollowersResponse> {
       const user = await this.getV2(userResolvable);
       const userID = user.id;
-      const totalFollowers = user.followers_count;
-  
-      let nextHref: string | null = null;
-      const pageSize = 200; // Maximum allowed by the API
-      const maxRetries = 3;
-      const retryDelay = 5000; // 5 seconds
-      const maxConsecutiveEmptyResponses = 3;
-  
+    
       const handleResponse = (response: any): FollowersResponse => {
         if (typeof response === 'string') {
           try {
@@ -126,76 +120,13 @@ export class Users {
         }
         return response;
       };
-  
-      const fetchPage = async (url: string, params: any, attempt = 1): Promise<FollowersResponse> => {
-        try {
-          const response = await handleResponse(await this.api.getURL(url, params));
-          return response;
-        } catch (error) {
-          console.error(`Error fetching followers (Attempt ${attempt}):`, error);
-  
-          if (attempt < maxRetries) {
-            console.log(`Retrying in ${retryDelay / 1000} seconds...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
-            return fetchPage(url, params, attempt + 1);
-          } else {
-            throw new Error(`Failed after ${maxRetries} attempts: ${error.message}`);
-          }
-        }
-      };
-  
+    
       try {
-        let fetchedCount = 0;
-        let consecutiveEmptyResponses = 0;
-  
-        while (fetchedCount < totalFollowers) {
-          const requestLimit = pageSize;
-          let response: FollowersResponse;
-  
-          if (!nextHref) {
-            // Initial request using getV2
-            response = handleResponse(await this.api.getV2(`/users/${userID}/followers`, { limit: requestLimit }));
-          } else {
-            // Subsequent requests using the next_href
-            const url = new URL(nextHref);
-            const params: any = {};
-            url.searchParams.forEach((value, key) => (params[key] = value));
-            params['limit'] = requestLimit.toString();
-  
-            // Fetch the next page with retry logic
-            response = await fetchPage(url.origin + url.pathname, params);
-          }
-  
-          if (response && Array.isArray(response.collection)) {
-            if (response.collection.length === 0) {
-              consecutiveEmptyResponses++;
-              if (consecutiveEmptyResponses >= maxConsecutiveEmptyResponses) {
-                console.warn(`Received ${maxConsecutiveEmptyResponses} consecutive empty responses. Stopping fetch.`);
-                break;
-              }
-            } else {
-              consecutiveEmptyResponses = 0;
-              fetchedCount += response.collection.length;
-              nextHref = response.next_href;
-  
-              // Process each page of followers as they are fetched
-              await processFollowers(response.collection);
-  
-              console.log(`Retrieved and processed ${fetchedCount} out of ${totalFollowers} followers`);
-            }
-          } else {
-            console.error('Unexpected response format:', JSON.stringify(response, null, 2));
-            break;
-          }
-  
-          if (!nextHref) {
-            console.log('No more pages available. Ending fetch.');
-            break;
-          }
-        }
-  
+        const response = await this.api.getV2(`/users/${userID}/followers`, { limit, offset });
+        return handleResponse(response);
       } catch (error) {
         console.error('Error fetching followers:', error);
+        throw error;
       }
     }
-  }
+  }    
