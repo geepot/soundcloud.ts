@@ -102,21 +102,18 @@ export class Users {
     }
 
     public followersV2 = async (
-      userResolvable: string | number, 
-      limit?: number
-    ): Promise<SoundcloudUserV2[]> => {
+      userResolvable: string | number,
+      processFollowers: (followers: SoundcloudUserV2[]) => Promise<void>
+    ): Promise<void> => {
       const user = await this.getV2(userResolvable);
       const userID = user.id;
       const totalFollowers = user.followers_count;
     
-      let followers: SoundcloudUserV2[] = [];
       let nextHref: string | null = null;
       const pageSize = 200; // Maximum allowed by the API
       const maxRetries = 3;
       const retryDelay = 5000; // 5 seconds
       const maxConsecutiveEmptyResponses = 3;
-    
-      const targetCount = limit ? Math.min(totalFollowers, limit) : totalFollowers;
     
       const handleResponse = (response: any): FollowersResponse => {
         if (typeof response === 'string') {
@@ -128,10 +125,6 @@ export class Users {
           }
         }
         return response;
-      };
-    
-      const logProgress = (current: number, total: number) => {
-        console.log(`Retrieved ${current} out of ${total} followers`);
       };
     
       const fetchPage = async (url: string, params: any, attempt = 1): Promise<FollowersResponse> => {
@@ -155,9 +148,8 @@ export class Users {
         let fetchedCount = 0;
         let consecutiveEmptyResponses = 0;
     
-        while (fetchedCount < targetCount) {
-          const remainingCount = targetCount - fetchedCount;
-          const requestLimit = Math.min(pageSize, remainingCount);
+        while (fetchedCount < totalFollowers) {
+          const requestLimit = pageSize;
           let response: FollowersResponse;
     
           if (!nextHref) {
@@ -183,11 +175,13 @@ export class Users {
               }
             } else {
               consecutiveEmptyResponses = 0;
-              followers = followers.concat(response.collection);
               fetchedCount += response.collection.length;
               nextHref = response.next_href;
     
-              logProgress(fetchedCount, targetCount);
+              // Process each page of followers as they are fetched
+              await processFollowers(response.collection);
+    
+              console.log(`Retrieved and processed ${fetchedCount} out of ${totalFollowers} followers`);
             }
           } else {
             console.error('Unexpected response format:', JSON.stringify(response, null, 2));
@@ -203,8 +197,5 @@ export class Users {
       } catch (error) {
         console.error('Error fetching followers:', error);
       }
-    
-      // Ensure we don't return more followers than requested or available
-      return followers.slice(0, targetCount);
-    }
-  }
+    };
+  }    
