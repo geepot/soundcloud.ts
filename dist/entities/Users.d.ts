@@ -32,5 +32,8 @@ export declare class Users {
      * Gets a user by URL (web scraping)
      */
     getAlt: (url: string) => Promise<SoundcloudUserV2>;
-    followersV2: (userResolvable: string | number, limit?: number) => Promise<SoundcloudUserV2[]>;
+    followersV2(userResolvable: string | number, offset?: number, limit?: number): Promise<{
+        followers: SoundcloudUserV2[];
+        nextOffset?: number;
+    }>;
 }

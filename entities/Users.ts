@@ -105,7 +105,7 @@ export class Users {
       userResolvable: string | number,
       offset: number = 0,
       limit: number = 200
-    ): Promise<FollowersResponse> {
+    ): Promise<{ followers: SoundcloudUserV2[], nextOffset?: number }> {
       const user = await this.getV2(userResolvable);
       const userID = user.id;
     
@@ -123,7 +123,19 @@ export class Users {
     
       try {
         const response = await this.api.getV2(`/users/${userID}/followers`, { limit, offset });
-        return handleResponse(response);
+        const parsedResponse = handleResponse(response);
+    
+        const followers = parsedResponse.collection;
+        const nextHref = parsedResponse.next_href;
+    
+        // Calculate the next offset from nextHref if it exists
+        let nextOffset: number | undefined = undefined;
+        if (nextHref) {
+          const url = new URL(nextHref);
+          nextOffset = parseInt(url.searchParams.get('offset') || '0', 10);
+        }
+    
+        return { followers, nextOffset };
       } catch (error) {
         console.error('Error fetching followers:', error);
         throw error;
