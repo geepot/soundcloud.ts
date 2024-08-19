@@ -8,7 +8,7 @@ export class Soundcloud {
     public static clientId?: string
     public static oauthToken?: string
     public static proxy?: string
-    public api = new API([Soundcloud.clientId], Soundcloud.oauthToken);
+    public api = new API(Soundcloud.clientId, Soundcloud.oauthToken)
     public apps = new Apps(this.api)
     public comments = new Comments(this.api)
     public me = new Me(this.api)
@@ -24,7 +24,7 @@ export class Soundcloud {
             if (oauthToken) Soundcloud.oauthToken = oauthToken
         }
         if (options?.proxy) Soundcloud.proxy = options.proxy
-        this.api = new API([Soundcloud.clientId], Soundcloud.oauthToken, Soundcloud.proxy);
+        this.api = new API(Soundcloud.clientId, Soundcloud.oauthToken, Soundcloud.proxy)
         this.apps = new Apps(this.api)
         this.comments = new Comments(this.api)
         this.me = new Me(this.api)

@@ -42,52 +42,54 @@ var apiURL = "https://api.soundcloud.com";
 var apiV2URL = "https://api-v2.soundcloud.com";
 var webURL = "https://soundcloud.com";
 var API = /** @class */ (function () {
-    function API(clientIds, oauthToken, proxy) {
-        if (clientIds === void 0) { clientIds = []; }
+    function API(clientId, oauthToken, proxy) {
         var _this = this;
+        this.clientId = clientId;
         this.oauthToken = oauthToken;
         this.api = new undici_1.Pool(apiURL);
         this.apiV2 = new undici_1.Pool(apiV2URL);
         this.web = new undici_1.Pool(webURL);
-        this.currentClientIdIndex = 0;
+        /**
+         * Gets an endpoint from the Soundcloud API.
+         */
         this.get = function (endpoint, params) {
-            _this.rotateClientId();
             return _this.getRequest(_this.api, apiURL, endpoint, params);
         };
+        /**
+         * Gets an endpoint from the Soundcloud V2 API.
+         */
         this.getV2 = function (endpoint, params) {
-            _this.rotateClientId();
             return _this.getRequest(_this.apiV2, apiV2URL, endpoint, params);
         };
+        /**
+         * Some endpoints use the main website as the URL.
+         */
         this.getWebsite = function (endpoint, params) {
-            _this.rotateClientId();
             return _this.getRequest(_this.web, webURL, endpoint, params);
         };
+        /**
+         * Gets a URL, such as download, stream, attachment, etc.
+         */
         this.getURL = function (URI, params) {
-            _this.rotateClientId();
             if (_this.proxy)
-                return _this.request(_this.proxy, _this.buildOptions(URI, "GET", params));
+                return _this.requestWithRetry(URI, _this.buildOptions(URI, "GET", params));
             var options = {
+                path: URI,
+                method: "GET",
                 query: params || {},
                 headers: API.headers,
                 maxRedirections: 5,
             };
-            if (_this.currentClientId)
-                options.query.client_id = _this.currentClientId;
+            if (_this.clientId)
+                options.query.client_id = _this.clientId;
             if (_this.oauthToken)
                 options.query.oauth_token = _this.oauthToken;
-            return (0, undici_1.request)(URI, options).then(function (r) {
-                if (r.statusCode.toString().startsWith("2")) {
-                    if (r.headers["content-type"] === "application/json")
-                        return r.body.json();
-                    return r.body.text();
-                }
-                throw new Error("Status code ".concat(r.statusCode));
-            });
+            return _this.requestWithRetry(URI, options);
         };
         this.buildOptions = function (path, method, params) {
             if (method === void 0) { method = "GET"; }
             var options = {
-                query: (method == "GET" && params) || {},
+                query: (method === "GET" && params) || {},
                 headers: API.headers,
                 method: method,
                 path: path,
@@ -95,48 +97,71 @@ var API = /** @class */ (function () {
             };
             if (method === "POST" && params)
                 options.body = JSON.stringify(params);
-            if (_this.currentClientId)
-                options.query.client_id = _this.currentClientId;
+            if (_this.clientId)
+                options.query.client_id = _this.clientId;
             if (_this.oauthToken)
                 options.query.oauth_token = _this.oauthToken;
             return options;
         };
-        this.request = function (pool, options) {
-            return pool.request(options).then(function (r) {
-                if (r.statusCode.toString().startsWith("2")) {
-                    if (r.headers["content-type"].includes("application/json"))
-                        return r.body.json();
-                    return r.body.text();
-                }
-                throw new Error("Status code ".concat(r.statusCode));
-            });
-        };
-        this.getRequest = function (pool, origin, endpoint, params) { return __awaiter(_this, void 0, void 0, function () {
-            var options, _a;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
+        this.requestWithRetry = function (URI, options) { return __awaiter(_this, void 0, void 0, function () {
+            var error_1;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
                     case 0:
-                        if (!!this.currentClientId) return [3 /*break*/, 2];
+                        _a.trys.push([0, 2, , 5]);
+                        return [4 /*yield*/, (0, undici_1.request)(URI, options).then(function (r) { return _this.handleResponse(r); })];
+                    case 1: return [2 /*return*/, _a.sent()];
+                    case 2:
+                        error_1 = _a.sent();
+                        if (!this.shouldRetry(error_1)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.getClientId(true)];
+                    case 3:
+                        _a.sent();
+                        options.query.client_id = this.clientId; // Update client_id in options
+                        return [2 /*return*/, (0, undici_1.request)(URI, options).then(function (r) { return _this.handleResponse(r); })];
+                    case 4: throw error_1;
+                    case 5: return [2 /*return*/];
+                }
+            });
+        }); };
+        this.request = function (pool, options) { return __awaiter(_this, void 0, void 0, function () {
+            var error_2;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 2, , 5]);
+                        return [4 /*yield*/, pool.request(options).then(function (r) { return _this.handleResponse(r); })];
+                    case 1: return [2 /*return*/, _a.sent()];
+                    case 2:
+                        error_2 = _a.sent();
+                        if (!this.shouldRetry(error_2)) return [3 /*break*/, 4];
+                        return [4 /*yield*/, this.getClientId(true)];
+                    case 3:
+                        _a.sent();
+                        options.query.client_id = this.clientId; // Update client_id in options
+                        return [2 /*return*/, pool.request(options).then(function (r) { return _this.handleResponse(r); })];
+                    case 4: throw error_2;
+                    case 5: return [2 /*return*/];
+                }
+            });
+        }); };
+        this.getRequest = function (pool, origin, endpoint, params) { return __awaiter(_this, void 0, void 0, function () {
+            var options;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!!this.clientId) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.getClientId()];
                     case 1:
-                        _b.sent();
-                        _b.label = 2;
+                        _a.sent();
+                        _a.label = 2;
                     case 2:
                         if (endpoint.startsWith("/"))
                             endpoint = endpoint.slice(1);
                         options = this.buildOptions("".concat(this.proxy ? origin : "", "/").concat(endpoint), "GET", params);
-                        _b.label = 3;
-                    case 3:
-                        _b.trys.push([3, 5, , 7]);
-                        return [4 /*yield*/, this.request(this.proxy || pool, options)];
-                    case 4: return [2 /*return*/, _b.sent()];
-                    case 5:
-                        _a = _b.sent();
-                        return [4 /*yield*/, this.getClientId(true)];
-                    case 6:
-                        _b.sent();
-                        return [2 /*return*/, this.request(this.proxy || pool, options)];
-                    case 7: return [2 /*return*/];
+                        return [2 /*return*/, this.request(pool, options)];
                 }
             });
         }); };
@@ -145,8 +170,7 @@ var API = /** @class */ (function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        this.rotateClientId();
-                        if (!!this.currentClientId) return [3 /*break*/, 2];
+                        if (!!this.clientId) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.getClientId()];
                     case 1:
                         _a.sent();
@@ -159,6 +183,21 @@ var API = /** @class */ (function () {
                 }
             });
         }); };
+        this.handleResponse = function (response) { return __awaiter(_this, void 0, void 0, function () {
+            var _a;
+            return __generator(this, function (_b) {
+                if (response.statusCode.toString().startsWith("2")) {
+                    if ((_a = response.headers["content-type"]) === null || _a === void 0 ? void 0 : _a.includes("application/json")) {
+                        return [2 /*return*/, response.body.json()];
+                    }
+                    return [2 /*return*/, response.body.text()];
+                }
+                throw new Error("Status code ".concat(response.statusCode));
+            });
+        }); };
+        this.shouldRetry = function (error) {
+            return ["401", "403"].some(function (code) { return error.message.includes("Status code ".concat(code)); });
+        };
         this.getClientIdWeb = function () { return __awaiter(_this, void 0, void 0, function () {
             var response, urls, script, clientId;
             var _a;
@@ -212,12 +251,13 @@ var API = /** @class */ (function () {
             });
         }); };
         this.getClientId = function (reset) { return __awaiter(_this, void 0, void 0, function () {
-            var newClientId;
+            var _a;
             var _this = this;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
+            return __generator(this, function (_b) {
+                switch (_b.label) {
                     case 0:
-                        if (!(!this.oauthToken && (!this.clientIds.length || reset))) return [3 /*break*/, 2];
+                        if (!(!this.oauthToken && (!this.clientId || reset))) return [3 /*break*/, 2];
+                        _a = this;
                         return [4 /*yield*/, this.getClientIdWeb().catch(function (webError) {
                                 return _this.getClientIdMobile().catch(function (mobileError) {
                                     throw new Error("Could not find client ID. Please provide one in the constructor. (Guide: https://github.com/Tenpi/soundcloud.ts#getting-started)" +
@@ -226,29 +266,17 @@ var API = /** @class */ (function () {
                                 });
                             })];
                     case 1:
-                        newClientId = _a.sent();
-                        this.clientIds.push(newClientId);
-                        _a.label = 2;
-                    case 2: return [2 /*return*/, this.currentClientId];
+                        _a.clientId = _b.sent();
+                        _b.label = 2;
+                    case 2: return [2 /*return*/, this.clientId];
                 }
             });
         }); };
-        this.clientIds = clientIds;
         if (oauthToken)
             API.headers.Authorization = "OAuth ".concat(oauthToken);
         if (proxy)
             this.proxy = new undici_1.Pool(proxy);
     }
-    Object.defineProperty(API.prototype, "currentClientId", {
-        get: function () {
-            return this.clientIds[this.currentClientIdIndex];
-        },
-        enumerable: false,
-        configurable: true
-    });
-    API.prototype.rotateClientId = function () {
-        this.currentClientIdIndex = (this.currentClientIdIndex + 1) % this.clientIds.length;
-    };
     Object.defineProperty(API.prototype, "headers", {
         get: function () {
             return API.headers;
