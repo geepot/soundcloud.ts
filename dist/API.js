@@ -42,35 +42,28 @@ var apiURL = "https://api.soundcloud.com";
 var apiV2URL = "https://api-v2.soundcloud.com";
 var webURL = "https://soundcloud.com";
 var API = /** @class */ (function () {
-    function API(clientId, oauthToken, proxy) {
+    function API(clientIds, oauthToken, proxy) {
+        if (clientIds === void 0) { clientIds = []; }
         var _this = this;
-        this.clientId = clientId;
         this.oauthToken = oauthToken;
         this.api = new undici_1.Pool(apiURL);
         this.apiV2 = new undici_1.Pool(apiV2URL);
         this.web = new undici_1.Pool(webURL);
-        /**
-         * Gets an endpoint from the Soundcloud API.
-         */
+        this.currentClientIdIndex = 0;
         this.get = function (endpoint, params) {
+            _this.rotateClientId();
             return _this.getRequest(_this.api, apiURL, endpoint, params);
         };
-        /**
-         * Gets an endpoint from the Soundcloud V2 API.
-         */
         this.getV2 = function (endpoint, params) {
+            _this.rotateClientId();
             return _this.getRequest(_this.apiV2, apiV2URL, endpoint, params);
         };
-        /**
-         * Some endpoints use the main website as the URL.
-         */
         this.getWebsite = function (endpoint, params) {
+            _this.rotateClientId();
             return _this.getRequest(_this.web, webURL, endpoint, params);
         };
-        /**
-         * Gets a URL, such as download, stream, attachment, etc.
-         */
         this.getURL = function (URI, params) {
+            _this.rotateClientId();
             if (_this.proxy)
                 return _this.request(_this.proxy, _this.buildOptions(URI, "GET", params));
             var options = {
@@ -78,8 +71,8 @@ var API = /** @class */ (function () {
                 headers: API.headers,
                 maxRedirections: 5,
             };
-            if (_this.clientId)
-                options.query.client_id = _this.clientId;
+            if (_this.currentClientId)
+                options.query.client_id = _this.currentClientId;
             if (_this.oauthToken)
                 options.query.oauth_token = _this.oauthToken;
             return (0, undici_1.request)(URI, options).then(function (r) {
@@ -102,8 +95,8 @@ var API = /** @class */ (function () {
             };
             if (method === "POST" && params)
                 options.body = JSON.stringify(params);
-            if (_this.clientId)
-                options.query.client_id = _this.clientId;
+            if (_this.currentClientId)
+                options.query.client_id = _this.currentClientId;
             if (_this.oauthToken)
                 options.query.oauth_token = _this.oauthToken;
             return options;
@@ -123,7 +116,7 @@ var API = /** @class */ (function () {
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
-                        if (!!this.clientId) return [3 /*break*/, 2];
+                        if (!!this.currentClientId) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.getClientId()];
                     case 1:
                         _b.sent();
@@ -152,7 +145,8 @@ var API = /** @class */ (function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        if (!!this.clientId) return [3 /*break*/, 2];
+                        this.rotateClientId();
+                        if (!!this.currentClientId) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.getClientId()];
                     case 1:
                         _a.sent();
@@ -218,13 +212,12 @@ var API = /** @class */ (function () {
             });
         }); };
         this.getClientId = function (reset) { return __awaiter(_this, void 0, void 0, function () {
-            var _a;
+            var newClientId;
             var _this = this;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
                     case 0:
-                        if (!(!this.oauthToken && (!this.clientId || reset))) return [3 /*break*/, 2];
-                        _a = this;
+                        if (!(!this.oauthToken && (!this.clientIds.length || reset))) return [3 /*break*/, 2];
                         return [4 /*yield*/, this.getClientIdWeb().catch(function (webError) {
                                 return _this.getClientIdMobile().catch(function (mobileError) {
                                     throw new Error("Could not find client ID. Please provide one in the constructor. (Guide: https://github.com/Tenpi/soundcloud.ts#getting-started)" +
@@ -233,17 +226,29 @@ var API = /** @class */ (function () {
                                 });
                             })];
                     case 1:
-                        _a.clientId = _b.sent();
-                        _b.label = 2;
-                    case 2: return [2 /*return*/, this.clientId];
+                        newClientId = _a.sent();
+                        this.clientIds.push(newClientId);
+                        _a.label = 2;
+                    case 2: return [2 /*return*/, this.currentClientId];
                 }
             });
         }); };
+        this.clientIds = clientIds;
         if (oauthToken)
             API.headers.Authorization = "OAuth ".concat(oauthToken);
         if (proxy)
             this.proxy = new undici_1.Pool(proxy);
     }
+    Object.defineProperty(API.prototype, "currentClientId", {
+        get: function () {
+            return this.clientIds[this.currentClientIdIndex];
+        },
+        enumerable: false,
+        configurable: true
+    });
+    API.prototype.rotateClientId = function () {
+        this.currentClientIdIndex = (this.currentClientIdIndex + 1) % this.clientIds.length;
+    };
     Object.defineProperty(API.prototype, "headers", {
         get: function () {
             return API.headers;
