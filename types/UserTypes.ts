@@ -126,3 +126,9 @@ export interface SoundcloudCreatorSubscription {
 export interface SoundcloudUserFilterV2 extends SoundcloudFilterV2 {
     "filter.place"?: string
 }
+
+export interface FollowersResponse {
+    collection: SoundcloudUserV2[];
+    next_href: string | null;
+    query_urn: string | null;
+}
